@@ -26,13 +26,16 @@ def fetch_points():
         st.error(f"Error fetching data: {e}")
         return []
 
-def save_point(lat, lng, label_text, user_input):
+def save_point(lat, lng, label_text, description, user_input, stars, review):
     try:
         supabase.table("locations").insert({
             "latitude": lat, 
             "longitude": lng, 
             "label": label_text,
-            "user_input": user_input
+            "description": description_input,
+            "user_input": user_input,
+            "stars": star_input,
+            "review": review_input
         }).execute()
     except Exception as e:
         st.error(f"Error saving data: {e}")
@@ -56,10 +59,19 @@ m = folium.Map(location=[38.0293, -78.4767], zoom_start=13)
 
 # 5. Drop pins with custom popups showing their labels
 for point in st.session_state.saved_points:
+    stars = "⭐" * point['rating']
+    popup_html = f"""
+    <div style='font-family: sans-serif; min-width: 150px;'>
+        <h4 style='margin: 0 0 5px 0;'>{point['label']}</h4>
+        <div style='color: #FFD700; font-size: 16px; margin-bottom: 5px;'>{stars}</div>
+        <small style='color: #666;'>Lat: {point['lat']:.4f}<br>Lng: {point['lng']:.4f}</small>
+    </div>
+    """
+    
     folium.Marker(
         location=[point['lat'], point['lng']],
-        popup=f"<b>{point['label']}</b><br>Lat: {point['lat']:.4f}, Lng: {point['lng']:.4f}",
-        icon=folium.Icon(color="green", icon="bookmark")
+        popup=folium.Popup(popup_html, max_width=250),
+        icon=folium.Icon(color="amber" if point['rating'] >= 4 else "blue", icon="star")
     ).add_to(m)
 
 # 6. Layout: Map on the left, input controls/data on the right
@@ -89,13 +101,23 @@ with col2:
         # The user input field requested
         user_label = st.text_input("Enter a name or description for this pin:", key="pin_label_input")
         user_name = st.text_input("Who is entering this pin?", key = "pin_user_input")
+
+        description_input = st.text_input("Enter the description of the restroom:", key = "pin_desc_input")
+        
+        # Streamlit Native Star Component
+        st.write("Your Rating:")
+        star_index = st.feedback("stars", key="pin_stars")
+        # st.feedback returns 0 to 4 for stars, so we add 1 to get a 1-5 score
+        rating = (star_index + 1) if star_index is not None else 0
+
+        review_input = st.text_input("Enter the review or reason for the stars:", key = "pin_review_input")
         
         if st.button("Save Pin to Supabase", type="primary"):
             if user_label.strip() == "":
                 user_label = "Unnamed Location"
                 
             # Save to cloud
-            save_point(lat, lng, user_label, user_name)
+            save_point(lat, lng, user_label, description_input, user_name, rating, review_input)
             # Clear pending state
             st.session_state.pending_click = None
             # Refresh lists
