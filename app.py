@@ -11,7 +11,7 @@ st.title("📍 Interactive Map Point Selector")
 st.write("Click anywhere on the map to select a point and capture its coordinates.")
 
 # 1. Initialize a Folium map centered on a specific location (e.g., San Francisco)
-m = folium.Map(location=[37.7749, -122.4194], zoom_start=12)
+m = folium.Map(location=[38.0293, -78.4767], zoom_start=13)
 
 # Add a click event marker or just let the user click
 # st_folium renders the map and returns data about user interactions (like clicks)
