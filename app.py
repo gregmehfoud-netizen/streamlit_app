@@ -4,11 +4,11 @@ from streamlit_folium import st_folium
 from supabase import create_client, Client
 
 # 1. Page Configuration
-st.set_page_config(page_title="C-Ville Map with Supabase", layout="wide")
-st.title("Supabase Cloud Map Selector")
-st.write("Click on the map to save a pin directly to your cloud Supabase database.")
+st.set_page_config(page_title="Labeled Map with Supabase", layout="wide")
+st.title("Database-Driven Map with Custom Labels")
+st.write("Click anywhere on the map, give it a label, and save it to the cloud.")
 
-# 2. Connect to Supabase (Cached to run only once)
+# 2. Connect to Supabase
 @st.cache_resource
 def init_supabase() -> Client:
     url = st.secrets["SUPABASE_URL"]
@@ -19,70 +19,104 @@ supabase = init_supabase()
 
 # 3. Database Functions
 def fetch_points():
-    """Fetch all coordinates from the Supabase table."""
     try:
-        response = supabase.table("locations").select("latitude, longitude").execute()
-        # Transform response into list of dicts to match our map loop
-        return [{"lat": row["latitude"], "lng": row["longitude"]} for row in response.data]
+        response = supabase.table("locations").select("latitude, longitude, label").execute()
+        return [{"lat": row["latitude"], "lng": row["longitude"], "label": row["label"]} for row in response.data]
     except Exception as e:
         st.error(f"Error fetching data: {e}")
         return []
 
-def save_point(lat, lng):
-    """Insert a new coordinate row into Supabase."""
+def save_point(lat, lng, label_text):
     try:
-        supabase.table("locations").insert({"latitude": lat, "longitude": lng}).execute()
+        supabase.table("locations").insert({
+            "latitude": lat, 
+            "longitude": lng, 
+            "label": label_text
+        }).execute()
     except Exception as e:
         st.error(f"Error saving data: {e}")
 
 def clear_db():
-    """Clear all records from the table (Deletes rows where ID is greater than 0)."""
     try:
         supabase.table("locations").delete().gt("id", 0).execute()
     except Exception as e:
         st.error(f"Error clearing data: {e}")
 
-# 4. Load points into Session State from cloud
+# Load initial data from cloud
 if 'saved_points' not in st.session_state:
     st.session_state.saved_points = fetch_points()
 
-# 5. Create Map UI (Charlottesville center)
-m = folium.Map(location=[38.0293, -78.4767], zoom_start=13)
-folium.LatLngPopup().add_to(m)
+# Keep track of a click that is waiting for a label
+if 'pending_click' not in st.session_state:
+    st.session_state.pending_click = None
 
-# 6. Overlay pins from Supabase
-for i, point in enumerate(st.session_state.saved_points):
+# 4. Base Map Setup
+m = folium.Map(location=[38.0293, -78.4767], zoom_start=13)
+
+# 5. Drop pins with custom popups showing their labels
+for point in st.session_state.saved_points:
     folium.Marker(
         location=[point['lat'], point['lng']],
-        popup=f"Supabase Pin #{i+1}: {point['lat']:.4f}, {point['lng']:.4f}",
-        icon=folium.Icon(color="green", icon="cloud")
+        popup=f"<b>{point['label']}</b><br>Lat: {point['lat']:.4f}, Lng: {point['lng']:.4f}",
+        icon=folium.Icon(color="green", icon="bookmark")
     ).add_to(m)
 
-# 7. Render map component
-output = st_folium(m, width=900, height=600, key="cville_supabase_map")
+# 6. Layout: Map on the left, input controls/data on the right
+col1, col2 = st.columns([3, 1])
 
-# 8. Handle Map Clicks
+with col1:
+    output = st_folium(m, width=900, height=600, key="labeled_map")
+
+# Capture map click and hold it as pending
 if output and output.get('last_clicked'):
-    new_click = output['last_clicked']
-    
-    # Avoid duplicate additions from the same interaction loop
-    if not st.session_state.saved_points or st.session_state.saved_points[-1] != new_click:
-        # Write to cloud database
-        save_point(new_click['lat'], new_click['lng'])
-        # Re-fetch fresh data from cloud
-        st.session_state.saved_points = fetch_points()
-        st.rerun()
+    clicked_coords = output['last_clicked']
+    # If it's a completely new click location, capture it
+    if st.session_state.pending_click != clicked_coords:
+        # Check against existing to prevent infinite rerun loops
+        if not st.session_state.saved_points or (st.session_state.saved_points[-1]['lat'] != clicked_coords['lat']):
+            st.session_state.pending_click = clicked_coords
+            st.rerun()
 
-# 9. Sidebar panel to show current data status
-with st.sidebar:
-    st.subheader("Cloud Records")
-    if st.session_state.saved_points:
-        for i, pt in enumerate(st.session_state.saved_points):
-            st.text(f"Cloud ID {i+1}: {pt['lat']:.4f}, {pt['lng']:.4f}")
+with col2:
+    # 7. Dynamic Input Field section
+    if st.session_state.pending_click:
+        st.subheader("📍 Label Your Selection")
+        lat = st.session_state.pending_click['lat']
+        lng = st.session_state.pending_click['lng']
+        st.caption(f"Coords: {lat:.4f}, {lng:.4f}")
         
-        if st.button("Clear Supabase Database"):
-            clear_db()
-            st.session_state.saved_points = []
+        # The user input field requested
+        user_label = st.text_input("Enter a name or description for this pin:", key="pin_label_input")
+        
+        if st.button("Save Pin to Supabase", type="primary"):
+            if user_label.strip() == "":
+                user_label = "Unnamed Location"
+                
+            # Save to cloud
+            save_point(lat, lng, user_label)
+            # Clear pending state
+            st.session_state.pending_click = None
+            # Refresh lists
+            st.session_state.saved_points = fetch_points()
+            st.success("Saved successfully!")
+            st.rerun()
+            
+        if st.button("Cancel"):
+            st.session_state.pending_click = None
             st.rerun()
     else:
-        st.info("No cloud points found. Click the map to populate Supabase!")
+        st.subheader("System Status")
+        st.info("Click a spot on the map to label and save a new pin.")
+
+    # 8. Data Overview Summary
+    st.divider()
+    st.subheader("Saved Cloud Places")
+    if st.session_state.saved_points:
+        for pt in st.session_state.saved_points:
+            st.markdown(f"**{pt['label']}**<br><small>{pt['lat']:.3f}, {pt['lng']:.3f}</small>", unsafe_allow_html=True)
+        
+        if st.button("Clear All Data"):
+            clear_db()
+            st.session_state.saved_points = []
+            st.session_state.pending_click = None
+            st.rerun()
