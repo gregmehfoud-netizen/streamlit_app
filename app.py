@@ -1,44 +1,53 @@
-### this is an app
-
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
 
-# Set up the page configuration
-st.set_page_config(page_title="Map Point Selector", layout="wide")
+# 1. Page Configuration
+st.set_page_config(page_title="Charlottesville Map Selector", layout="wide")
+st.title("Interactive Map Point Selector")
+st.write("Click on the map to drop a permanent pin. Click 'Clear All Pins' to start over.")
 
-st.title("📍 Interactive Map Point Selector")
-st.write("Click anywhere on the map to select a point and capture its coordinates.")
+# 2. Initialize Session State for saving points
+if 'saved_points' not in st.session_state:
+    st.session_state.saved_points = []
 
-# 1. Initialize a Folium map centered on a specific location (e.g., San Francisco)
+# 3. Create the Base Map (Centered on Charlottesville, VA)
 m = folium.Map(location=[38.0293, -78.4767], zoom_start=13)
 
-# Add a click event marker or just let the user click
-# st_folium renders the map and returns data about user interactions (like clicks)
-map_data = st_folium(m, width=1000, height=600)
+# Add the click popup helper
+folium.LatLngPopup().add_to(m)
 
-# 2. Check if the user clicked on the map
-if map_data and map_data.get("last_clicked"):
-    lat = map_data["last_clicked"]["lat"]
-    lng = map_data["last_clicked"]["lng"]
-    
-    # Display the captured coordinates
-    st.success(f"Selected Coordinates: **Latitude**: {lat} | **Longitude**: {lng}")
-    
-    # Optional: store it in session state if you want to build a list of multiple points
-    if 'selected_points' not in st.session_state:
-        st.session_state.selected_points = []
-        
-    # Button to save the point to a list
-    if st.button("Save this point"):
-        st.session_state.selected_points.append({"lat": lat, "lon": lng})
-        st.toast("Point saved!", icon="✅")
+# 4. Draw existing pins from our saved session state onto the map
+for i, point in enumerate(st.session_state.saved_points):
+    folium.Marker(
+        location=[point['lat'], point['lng']],
+        popup=f"Pin #{i+1}: {point['lat']:.4f}, {point['lng']:.4f}",
+        icon=folium.Icon(color="red", icon="info-sign")
+    ).add_to(m)
 
-# 3. Display saved points if any exist
-if 'selected_points' in st.session_state and st.session_state.selected_points:
-    st.write("### Saved Points")
-    st.json(st.session_state.selected_points)
+# 5. Render the map in Streamlit
+output = st_folium(m, width=900, height=600, key="cville_map")
+
+# 6. Capture new clicks and update session state
+if output and output.get('last_clicked'):
+    new_click = output['last_clicked']
     
-    if st.button("Clear saved points"):
-        st.session_state.selected_points = []
+    # Check to make sure we don't accidentally double-add the exact same click
+    if not st.session_state.saved_points or st.session_state.saved_points[-1] != new_click:
+        st.session_state.saved_points.append(new_click)
+        # Rerun the app immediately to draw the newly added pin
         st.rerun()
+
+# 7. Sidebar Sidebar UI to show data and add utility
+with st.sidebar:
+    st.subheader("Saved Locations")
+    if st.session_state.saved_points:
+        for i, pt in enumerate(st.session_state.saved_points):
+            st.text(f"#{i+1}: {pt['lat']:.4f}, {pt['lng']:.4f}")
+        
+        # Button to clear the memory
+        if st.button("Clear All Pins"):
+            st.session_state.saved_points = []
+            st.rerun()
+    else:
+        st.info("No points saved yet. Click the map to add one!")
