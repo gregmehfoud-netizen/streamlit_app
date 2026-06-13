@@ -20,7 +20,7 @@ supabase = init_supabase()
 # 3. Database Functions
 def fetch_points():
     try:
-        response = supabase.table("locations").select("latitude, longitude, label").execute()
+        response = supabase.table("locations").select("latitude, longitude, label, stars").execute()
         return [{"lat": row["latitude"], "lng": row["longitude"], "label": row["label"], "stars": row["stars"]} for row in response.data]
     except Exception as e:
         st.error(f"Error fetching data: {e}")
