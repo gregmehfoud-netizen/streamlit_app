@@ -31,7 +31,8 @@ def save_point(lat, lng, label_text):
         supabase.table("locations").insert({
             "latitude": lat, 
             "longitude": lng, 
-            "label": label_text
+            "label": label_text,
+            "user_input": user_input
         }).execute()
     except Exception as e:
         st.error(f"Error saving data: {e}")
