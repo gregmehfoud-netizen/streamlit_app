@@ -59,7 +59,7 @@ m = folium.Map(location=[38.0293, -78.4767], zoom_start=13)
 
 # 5. Drop pins with custom popups showing their labels
 for point in st.session_state.saved_points:
-    stars = "⭐" * point['rating']
+    stars = "⭐" * point['stars']
     popup_html = f"""
     <div style='font-family: sans-serif; min-width: 150px;'>
         <h4 style='margin: 0 0 5px 0;'>{point['label']}</h4>
@@ -71,7 +71,7 @@ for point in st.session_state.saved_points:
     folium.Marker(
         location=[point['lat'], point['lng']],
         popup=folium.Popup(popup_html, max_width=250),
-        icon=folium.Icon(color="amber" if point['rating'] >= 4 else "blue", icon="star")
+        icon=folium.Icon(color="amber" if point['stars'] >= 4 else "blue", icon="star")
     ).add_to(m)
 
 # 6. Layout: Map on the left, input controls/data on the right
