@@ -26,7 +26,7 @@ def fetch_points():
         st.error(f"Error fetching data: {e}")
         return []
 
-def save_point(lat, lng, label_text):
+def save_point(lat, lng, label_text, user_input):
     try:
         supabase.table("locations").insert({
             "latitude": lat, 
@@ -88,13 +88,14 @@ with col2:
         
         # The user input field requested
         user_label = st.text_input("Enter a name or description for this pin:", key="pin_label_input")
+        user_name = st.text_input("Who is entering this pin?", key = "pin_user_input")
         
         if st.button("Save Pin to Supabase", type="primary"):
             if user_label.strip() == "":
                 user_label = "Unnamed Location"
                 
             # Save to cloud
-            save_point(lat, lng, user_label)
+            save_point(lat, lng, user_label, user_name)
             # Clear pending state
             st.session_state.pending_click = None
             # Refresh lists
